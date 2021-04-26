@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -33,6 +34,47 @@ func googleapisBooks(isbcode string) []byte {
 	}
 	// fmt.Println(string(body))
 	return body
+}
+
+func FoundBooksByGooglleapis(books []*bookInfo) (foundBooks []*bookInfo, notProcess []*bookInfo) {
+	// var bookChan bookChanel
+	bookCh := make(bookChanel)
+	go func() {
+		for i, book := range books {
+			go func(i int, book *bookInfo) {
+				booksStr := &googleapisBookJsonStruct{}
+				isbn := book.ISBN
+				myJsonString := googleapisBooks(isbn)
+				json.Unmarshal([]byte(myJsonString), &booksStr)
+				// booksStr := <-gchan
+				if booksStr != nil {
+					if len(booksStr.Items) > 0 {
+						// fmt.Println("Find: ", isbn, " ", booksStr.Items[0].Volumeinfo.Title)
+						book.Title = booksStr.Items[0].Volumeinfo.Title
+					} else {
+						// fmt.Println("Not found: ", isbn)
+					}
+				}
+				bookCh <- book
+			}(i, book)
+		}
+	}()
+
+	var book *bookInfo
+	for i := 0; i < len(books); i++ {
+		book = <-bookCh
+		if book == nil {
+			fmt.Println("----Not Found! ----")
+		}
+		if book.Title == "" {
+			notProcess = append(notProcess, book)
+			continue
+		}
+		fmt.Print("ISBN: ", book.ISBN, " Title: ", book.Title, "\n")
+		foundBooks = append(foundBooks, book)
+	}
+
+	return foundBooks, notProcess
 }
 
 type googleapisBookJsonStruct struct {

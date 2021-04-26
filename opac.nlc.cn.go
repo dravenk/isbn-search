@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 )
 
 func OpacDotNlcDotCn(tok, isbcode string) []byte {
@@ -46,4 +47,39 @@ func OpacDotNlcDotCn(tok, isbcode string) []byte {
 	// fmt.Println(string(body))
 
 	return body
+}
+
+func FoundBooksByOpacNlcCn(tok string, books []*bookInfo) (foundBooks []*bookInfo, notProcess []*bookInfo) {
+	// var bookChan bookChanel
+	bookCh := make(bookChanel)
+	go func() {
+		for i, book := range books {
+			go func(i int, book *bookInfo) {
+				isbn := book.ISBN
+				data := OpacDotNlcDotCn(tok, isbn)
+				titleraw := FindTitle(string(data))
+				titleraw = strings.Replace(titleraw, "\n", "", -1)
+				titleraw = strings.Trim(titleraw, " ")
+				titleraw = strings.TrimRight(titleraw, " ")
+				book.Title = titleraw
+				bookCh <- book
+			}(i, book)
+		}
+	}()
+
+	var book *bookInfo
+	for i := 0; i < len(books); i++ {
+		book = <-bookCh
+		if book == nil {
+			fmt.Println("----Not Found! ----")
+		}
+		if book.Title == "" {
+			notProcess = append(notProcess, book)
+			continue
+		}
+		fmt.Print("ISBN: ", book.ISBN, " Title: ", book.Title, "\n")
+		foundBooks = append(foundBooks, book)
+	}
+
+	return foundBooks, notProcess
 }
